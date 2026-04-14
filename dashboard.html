@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+  <html lang="ko">
+  <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Trading Dashboard</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0e1a; color: #e2e8f0; }
+.header { background: #111827; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #1f2937; }
+.header h1 { font-size: 18px; font-weight: 700; color: #60a5fa; }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; display: inline-block; margin-right: 6px; }
+.layout { display: grid; grid-template-columns: 240px 1fr; min-height: calc(100vh - 50px); }
+.sidebar { background: #111827; border-right: 1px solid #1f2937; padding: 16px; overflow-y: auto; }
+.main { padding: 20px; overflow-y: auto; }
+.card { background: #1f2937; border-radius: 8px; padding: 16px; margin-bottom: 16px; border: 1px solid #374151; }
+.card-title { font-size: 12px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; font-weight: 600; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.metric { text-align: center; }
+.metric-val { font-size: 24px; font-weight: 700; color: #f9fafb; }
+.metric-label { font-size: 11px; color: #6b7280; margin-top: 4px; }
+.fx-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #374151; font-size: 13px; }
+.fx-item:last-child { border-bottom: none; }
+.up { color: #10b981; }
+.down { color: #ef4444; }
+.neutral { color: #9ca3af; }
+.badge { padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-green { background: #064e3b; color: #10b981; }
+.badge-red { background: #7f1d1d; color: #ef4444; }
+.badge-gray { background: #1f2937; color: #9ca3af; }
+.section-title { font-size: 14px; font-weight: 600; color: #d1d5db; margin-bottom: 12px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { color: #6b7280; font-weight: 500; padding: 8px 12px; text-align: left; border-bottom: 1px solid #374151; font-size: 11px; text-transform: uppercase; }
+  td { padding: 8px 12px; border-bottom: 1px solid #1f2937; }
+tr:hover td { background: #111827; }
+.config-input { background: #111827; border: 1px solid #374151; border-radius: 4px; color: #e2e8f0; padding: 6px 10px; font-size: 12px; width: 100%; margin-bottom: 8px; }
+.btn { padding: 6px 14px; border-radius: 4px; border: none; cursor: pointer; font-size: 12px; font-weight: 600; }
+.btn-primary { background: #3b82f6; color: white; }
+.btn-primary:hover { background: #2563eb; }
+  .resource-bar { background: #374151; border-radius: 4px; height: 6px; margin-top: 4px; overflow: hidden; }
+.resource-bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+.cpu-fill { background: #3b82f6; }
+  .ram-fill { background: #8b5cf6; }
+.gpu-fill { background: #10b981; }
+.tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; margin-right: 4px; }
+.sheets-connected { color: #10b981; font-size: 12px; }
+.sheets-disconnected { color: #ef4444; font-size: 12px; }
+  </style>
+  </head>
+  <body>
+
+  <div class="header">
+  <h1>&#x1F4C8; AI Trading Dashboard</h1>
+    <div style="display:flex;align-items:center;gap:16px">
+    <span id="sheets-status" class="sheets-disconnected">&#9711; GAS Disconnected</span>
+    <span><span class="status-dot" id="status-dot"></span><span id="server-time" style="font-size:12px;color:#9ca3af"></span></span>
+  </div>
+  </div>
+
+  <div class="layout">
+    <!-- Sidebar -->
+    <div class="sidebar">
+    <div class="card-title">FX / Rates</div>
+    <div id="fx-list">Loading...</div>
+      <div class="card-title" style="margin-top:16px">Commodities</div>
+    <div id="commodity-list">Loading...</div>
+      <div class="card-title" style="margin-top:16px">Indices</div>
+      <div id="index-list">Loading...</div>
+      <div class="card-title" style="margin-top:20px">System Resources</div>
+      <div id="resources">Loading...</div>
+      <div style="margin-top:16px">
+        <div class="card-title">API Config</div>
+        <input id="tunnel-url" class="config-input" placeholder="API Base URL (optional)" />
+        <input id="api-key" class="config-input" placeholder="API Key (optional)" />
+        <button class="btn btn-primary" onclick="saveConfig()">Apply</button>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main">
+      <!-- Top metrics -->
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-title">Today's Trades</div>
+          <div class="metric">
+            <div class="metric-val" id="today-trades">-</div>
+            <div class="metric-label">Transactions</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Open Positions</div>
+          <div class="metric">
+            <div class="metric-val" id="open-positions">-</div>
+            <div class="metric-label">Active</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">P&L Today</div>
+          <div class="metric">
+            <div class="metric-val" id="pnl-today">-</div>
+            <div class="metric-label">USD</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Market Sentiment + GPU -->
+      <div class="grid-2">
+        <div class="card">
+          <div class="section-title">Market Sentiment</div>
+          <div id="sentiment-content">Loading...</div>
+        </div>
+        <div class="card">
+          <div class="section-title">GPU / AI Engine</div>
+          <div id="gpu-content">Loading...</div>
+        </div>
+      </div>
+
+      <!-- Symbols from GAS -->
+      <div class="card">
+        <div class="section-title">Symbols (Google Sheets)</div>
+        <div id="symbols-table">Loading...</div>
+      </div>
+
+      <!-- Portfolio -->
+      <div class="card">
+        <div class="section-title">Portfolio (Google Sheets)</div>
+        <div id="portfolio-table">Loading...</div>
+      </div>
+
+      <!-- Recent Signals -->
+      <div class="card">
+        <div class="section-title">Recent Signals</div>
+        <div id="signals-table">Loading...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // ─── Config ──────────────────────────────────────────────────────────────────
+  const TUNNEL_URL = '';
+  const API_KEY = '';
+let _API = TUNNEL_URL || location.origin;
+let _APIKEY = API_KEY;
+
+function saveConfig() {
+    const tu = document.getElementById('tunnel-url').value.trim();
+  const ak = document.getElementById('api-key').value.trim();
+  if (tu) _API = tu;
+  _APIKEY = ak;
+  init();
+}
+
+function _headers() {
+    const h = { 'Content-Type': 'application/json' };
+  if (_APIKEY) h['X-API-Key'] = _APIKEY;
+  return h;
+}
+
+async function _fetch(path, opts = {}) {
+  const r = await fetch(_API + path, { ...opts, headers: { ..._headers(), ...(opts.headers || {}) } });
+  return r.json();
+}
+
+// ─── Utils ────────────────────────────────────────────────────────────────────
+function pct(v) {
+    v = Number(v) || 0;
+  const cls = v > 0 ? 'up' : v < 0 ? 'down' : 'neutral';
+  const sign = v > 0 ? '+' : '';
+  return `<span class="${cls}">${sign}${v.toFixed(2)}%</span>`;
+                                       }
+
+function money(v) {
+    v = Number(v) || 0;
+  return v >= 0 ? `<span class="up">+$${v.toFixed(2)}</span>` : `<span class="down">-$${Math.abs(v).toFixed(2)}</span>`;
+}
+
+// ─── Load Functions ───────────────────────────────────────────────────────────
+async function loadSidebar() {
+  try {
+    const d = await _fetch('/market/sidebar');
+    const fx = (d.data && d.data.fx) || [];
+    const commodity = (d.data && d.data.commodity) || [];
+    const index = (d.data && d.data.index) || [];
+
+    document.getElementById('fx-list').innerHTML = fx.map(f =>
+            `<div class="fx-item"><span>${f.flag ? '&#127988; ' : ''}${f.name}</span><span>${pct(f.change_pct)}</span></div>`
+          ).join('') || '<div style="color:#6b7280;font-size:12px">No data</div>';
+
+          document.getElementById('commodity-list').innerHTML = commodity.map(c =>
+            `<div class="fx-item"><span>${c.name}</span><span>$${Number(c.price).toFixed(2)} ${pct(c.change_pct)}</span></div>`
+          ).join('') || '<div style="color:#6b7280;font-size:12px">No data</div>';
+
+          document.getElementById('index-list').innerHTML = index.map(i =>
+            `<div class="fx-item"><span>${i.name}</span><span>${pct(i.change_pct)}</span></div>`
+          ).join('') || '<div style="color:#6b7280;font-size:12px">No data</div>';
+      } catch (e) {
+    document.getElementById('fx-list').innerHTML = '<div style="color:#ef4444;font-size:12px">Error loading</div>';
+  }
+}
+
+async function loadResources() {
+  try {
+    const d = await _fetch('/system/resources');
+    const r = d.data || {};
+    const cpu = r.cpu || {};
+    const ram = r.ram || {};
+    const gpu = r.gpu || {};
+    document.getElementById('resources').innerHTML = `
+      <div style="font-size:12px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between"><span>CPU</span><span>${cpu.percent || 0}%</span></div>
+        <div class="resource-bar"><div class="resource-bar-fill cpu-fill" style="width:${cpu.percent || 0}%"></div></div>
+      </div>
+      <div style="font-size:12px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between"><span>RAM</span><span>${ram.used_gb || 0}/${ram.total_gb || 0}GB</span></div>
+        <div class="resource-bar"><div class="resource-bar-fill ram-fill" style="width:${ram.percent || 0}%"></div></div>
+      </div>
+      <div style="font-size:12px">
+        <div style="display:flex;justify-content:space-between"><span>GPU VRAM</span><span>${gpu.vram_used_gb || 0}/${gpu.vram_total_gb || 0}GB</span></div>
+        <div class="resource-bar"><div class="resource-bar-fill gpu-fill" style="width:${gpu.vram_total_gb ? (gpu.vram_used_gb / gpu.vram_total_gb * 100) : 0}%"></div></div>
+      </div>
+    `;
+
+    document.getElementById('gpu-content').innerHTML = `
+      <div style="font-size:13px">
+        <div style="margin-bottom:8px"><strong>${gpu.name || 'N/A'}</strong></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div class="metric"><div class="metric-val" style="font-size:18px">${gpu.percent || 0}%</div><div class="metric-label">GPU Usage</div></div>
+          <div class="metric"><div class="metric-val" style="font-size:18px">${gpu.vram_used_gb || 0}GB</div><div class="metric-label">VRAM Used</div></div>
+        </div>
+      </div>`;
+} catch(e) {}
+}
+
+async function loadStatus() {
+  try {
+    const d = await _fetch('/system/status');
+    const r = d.data || {};
+    document.getElementById('today-trades').textContent = r.today_trades || 0;
+    document.getElementById('open-positions').textContent = r.open_positions || 0;
+    document.getElementById('server-time').textContent = new Date(r.server_time || '').toLocaleTimeString('ko-KR');
+} catch(e) {}
+}
+
+async function loadSheetsStatus() {
+  try {
+    const d = await _fetch('/sheets/status');
+    const r = d.data || {};
+    const el = document.getElementById('sheets-status');
+    if (r.connected) {
+      el.className = 'sheets-connected';
+      el.textContent = '&#10003; GAS Connected';
+} else {
+      el.className = 'sheets-disconnected';
+      el.textContent = '&#9711; GAS: ' + (r.message || 'Disconnected');
+}
+} catch(e) {}
+}
+
+async function loadSentiment() {
+  try {
+    const d = await _fetch('/market/sentiment');
+    const r = d.data || {};
+    const fg = r.fear_greed || 50;
+    const color = fg < 30 ? '#ef4444' : fg > 70 ? '#10b981' : '#f59e0b';
+    document.getElementById('sentiment-content').innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center">
+        <div><div style="font-size:28px;font-weight:700;color:${color}">${fg}</div><div style="font-size:11px;color:#6b7280">${r.label || 'Neutral'}</div></div>
+        <div><div style="font-size:20px;font-weight:700">${Number(r.vix || 0).toFixed(1)}</div><div style="font-size:11px;color:#6b7280">VIX</div></div>
+        <div><div style="font-size:20px;font-weight:700">${Number(r.put_call || 0).toFixed(2)}</div><div style="font-size:11px;color:#6b7280">Put/Call</div></div>
+      </div>`;
+} catch(e) {}
+}
+
+async function loadSymbols() {
+  try {
+    const d = await _fetch('/sheets/symbols');
+    const rows = d.data || [];
+    if (!rows.length) {
+      document.getElementById('symbols-table').innerHTML = '<div style="color:#6b7280;font-size:12px">No data. Configure GAS_URL in .env</div>';
+      return;
+    }
+    document.getElementById('symbols-table').innerHTML = `
+            <table>
+              <tr><th>Symbol</th><th>Name</th><th>Market</th><th>Sector</th><th>Status</th></tr>
+              ${rows.slice(0, 10).map(r => `<tr>
+                <td style="font-weight:600;color:#60a5fa">${r.symbol || ''}</td>
+                <td>${r.name || ''}</td>
+                <td>${r.market || ''}</td>
+                <td>${r.sector || ''}</td>
+                <td><span class="badge ${r.active ? 'badge-green' : 'badge-gray'}">${r.active ? 'Active' : 'Inactive'}</span></td>
+              </tr>`).join('')}
+            </table>`;
+      } catch(e) {
+          document.getElementById('symbols-table').innerHTML = '<div style="color:#ef4444;font-size:12px">Error loading</div>';
+    }
+    }
+
+async function loadPortfolio() {
+  try {
+    const d = await _fetch('/sheets/portfolio');
+    const rows = d.data || [];
+    if (!rows.length) {
+      document.getElementById('portfolio-table').innerHTML = '<div style="color:#6b7280;font-size:12px">No data. Configure GAS_URL in .env</div>';
+      return;
+    }
+    document.getElementById('portfolio-table').innerHTML = `
+            <table>
+              <tr><th>ID</th><th>Name</th><th>Market</th><th>Strategy</th><th>Capital</th><th>Status</th></tr>
+              ${rows.map(r => `<tr>
+                <td style="color:#9ca3af;font-size:11px">${r.id || ''}</td>
+                <td style="font-weight:600">${r.name || ''}</td>
+                <td>${r.market || ''}</td>
+                <td>${r.strategy || ''}</td>
+                <td>$${Number(r.capital || 0).toLocaleString()}</td>
+                <td><span class="badge ${r.active ? 'badge-green' : 'badge-gray'}">${r.active ? 'Active' : 'Off'}</span></td>
+              </tr>`).join('')}
+            </table>`;
+    } catch(e) {
+    document.getElementById('portfolio-table').innerHTML = '<div style="color:#ef4444;font-size:12px">Error loading</div>';
+}
+}
+
+async function loadSignals() {
+  try {
+    const d = await _fetch('/sheets/signals');
+    const rows = d.data || [];
+    if (!rows.length) {
+      document.getElementById('signals-table').innerHTML = '<div style="color:#6b7280;font-size:12px">No signals yet</div>';
+      return;
+    }
+    document.getElementById('signals-table').innerHTML = `
+            <table>
+              <tr><th>Time</th><th>Symbol</th><th>Signal</th><th>Confidence</th></tr>
+              ${rows.slice(0, 10).map(r => `<tr>
+                <td style="color:#6b7280;font-size:11px">${r.ts || ''}</td>
+                <td style="font-weight:600;color:#60a5fa">${r.symbol || ''}</td>
+                <td><span class="badge ${r.signal === 'buy' ? 'badge-green' : r.signal === 'sell' ? 'badge-red' : 'badge-gray'}">${(r.signal || '').toUpperCase()}</span></td>
+                <td>${Number(r.confidence || 0).toFixed(2)}</td>
+              </tr>`).join('')}
+            </table>`;
+    } catch(e) {
+    document.getElementById('signals-table').innerHTML = '<div style="color:#ef4444;font-size:12px">Error loading</div>';
+}
+}
+
+async function loadPnL() {
+  try {
+    const d = await _fetch('/trades/today');
+    const meta = d.meta || {};
+    document.getElementById('pnl-today').innerHTML = money(meta.pnl || 0);
+} catch(e) {}
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+async function init() {
+  await Promise.all([
+    loadStatus(),
+    loadSheetsStatus(),
+    loadSidebar(),
+    loadResources(),
+    loadSentiment(),
+    loadSymbols(),
+    loadPortfolio(),
+    loadSignals(),
+    loadPnL()
+  ]);
+}
+
+// Auto-refresh every 60 seconds
+init();
+setInterval(init, 60000);
+</script>
+</body>
+</html>
