@@ -1,0 +1,19 @@
+services:
+  - type: web
+      name: ai-trading-api
+          env: python
+              buildCommand: pip install -r requirements.txt
+                  startCommand: uvicorn api_server:app --host 0.0.0.0 --port $PORT
+                      envVars:
+                            - key: GAS_URL
+                                    sync: false
+                                          - key: GAS_TIMEOUT
+                                                  value: "10"
+                                                        - key: OLLAMA_URL
+                                                                value: "http://localhost:11434"
+                                                                      - key: API_KEY
+                                                                              sync: false
+                                                                                    - key: ALLOWED_ORIGINS
+                                                                                            value: "*"
+                                                                                                  - key: PORT
+                                                                                                          value: "8000"
